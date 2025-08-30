@@ -26,7 +26,7 @@ MESSAGE_PAIRS: dict[int, int] = {}  # Maps DM message ID to channel message ID
 MINUTE = timedelta(minutes=1)
 
 # User identification
-SESSION_SECRET = b""
+SESSION_SECRET = secrets.token_bytes(32)
 USER_PREFIXES: dict[int, str] = {}
 
 
@@ -45,9 +45,6 @@ def get_user_prefix(user_id: int) -> str:
 @bot.event
 async def on_ready() -> None:
     """Called when the bot is ready."""
-    global SESSION_SECRET
-    SESSION_SECRET = secrets.token_bytes(32)
-
     logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     try:
         await bot.wait_until_ready()
