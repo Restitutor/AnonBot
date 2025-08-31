@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Main entry point for the Discord bot."""
 
-import hashlib
-import hmac
 import logging as logger
-import secrets
+import random
 from datetime import datetime, timedelta
 
 import discord
@@ -16,8 +14,7 @@ bot = discord.Bot(
     intents=discord.Intents.none()
     | discord.Intents.message_content
     | discord.Intents.guilds
-    | discord.Intents.dm_messages
-    | discord.Intents.message_content,
+    | discord.Intents.dm_messages,
 )
 
 # Message tracking
@@ -26,25 +23,42 @@ MESSAGE_PAIRS: dict[int, int] = {}  # Maps DM message ID to channel message ID
 MINUTE = timedelta(minutes=1)
 
 # User identification
-SESSION_SECRET = secrets.token_bytes(32)
-USER_PREFIXES: dict[int, str] = {}
+ANIMAL_NAMES = [
+    "Panda",
+    "Koala",
+    "Fox",
+    "Otter",
+    "Penguin",
+    "Hamster",
+    "Hedgehog",
+    "Ferret",
+    "Squirrel",
+    "Raccoon",
+]
+AVAILABLE_ANIMALS = []
+USER_ANIMALS: dict[int, str] = {}
 
 
-def get_user_prefix(user_id: int) -> str:
-    """Get a consistent 4-character prefix for a user ID."""
-    if user_id not in USER_PREFIXES:
-        digest = hmac.new(
-            SESSION_SECRET,
-            str(user_id).encode(),
-            hashlib.sha256,
-        ).hexdigest()
-        USER_PREFIXES[user_id] = digest[:4].upper()
-    return USER_PREFIXES[user_id]
+def get_user_animal(user_id: int) -> str:
+    """Get a cute animal name for a user ID."""
+    if user_id not in USER_ANIMALS:
+        if not AVAILABLE_ANIMALS:
+            # If we somehow run out, just use "User" + number
+            return f"User{len(USER_ANIMALS) + 1}"
+
+        animal = AVAILABLE_ANIMALS.pop()
+        USER_ANIMALS[user_id] = animal
+
+    return USER_ANIMALS[user_id]
 
 
 @bot.event
 async def on_ready() -> None:
     """Called when the bot is ready."""
+    global AVAILABLE_ANIMALS
+    AVAILABLE_ANIMALS = ANIMAL_NAMES.copy()
+    random.shuffle(AVAILABLE_ANIMALS)
+
     logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
     try:
         await bot.wait_until_ready()
@@ -69,9 +83,9 @@ async def on_text_message(message: discord.Message) -> None:
         # Get the target channel
         channel = await bot.fetch_channel(CHANNEL_ID)
 
-        # Prepare message content with user prefix
-        user_prefix = get_user_prefix(message.author.id)
-        msg = f"[{user_prefix}] {message.clean_content}"
+        # Prepare message content with user animal
+        user_animal = get_user_animal(message.author.id)
+        msg = f"**{user_animal}:** {message.clean_content}"
         last_time = LAST_MSG.get(message.channel.id)
 
         # Add prefix if it's a new conversation (60+ minutes since last message)
@@ -112,9 +126,9 @@ async def on_message_edit(before: discord.Message, after: discord.Message) -> No
             channel = await bot.fetch_channel(CHANNEL_ID)
             channel_message = await channel.fetch_message(MESSAGE_PAIRS[after.id])
 
-            # Prepare edited message content with user prefix
-            user_prefix = get_user_prefix(after.author.id)
-            msg = f"[{user_prefix}] {after.clean_content}"
+            # Prepare edited message content with user animal
+            user_animal = get_user_animal(after.author.id)
+            msg = f"**{user_animal}:** {after.clean_content}"
 
             # Preserve prefix if it exists
             if channel_message.content.startswith(f"**New {PREFIX}:**\n"):
@@ -145,9 +159,9 @@ async def on_message_delete(message: discord.Message) -> None:
             channel = await bot.fetch_channel(CHANNEL_ID)
             channel_message = await channel.fetch_message(MESSAGE_PAIRS[message.id])
 
-            # Prepare deleted message content with user prefix
-            user_prefix = get_user_prefix(message.author.id)
-            msg = f"[{user_prefix}] [Deleted]"
+            # Prepare deleted message content with user animal
+            user_animal = get_user_animal(message.author.id)
+            msg = f"**{user_animal}:** [Deleted]"
 
             # Preserve prefix if it exists
             if channel_message.content.startswith(f"**New {PREFIX}:**\n"):
